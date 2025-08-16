@@ -2,6 +2,11 @@ import UserModel from "../models/user";
 import { User } from "../interfaces/user.interface";
 import { encrypt, verified } from "../utils/password.handle";
 
+export const GetUser = async (id: string) => {
+  const responseItem = await UserModel.findOne({ _id: id });
+  return responseItem;
+};
+
 export const GetUsers = async () => {
   const responseItem = await UserModel.find({});
   return responseItem;

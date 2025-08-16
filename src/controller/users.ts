@@ -1,7 +1,17 @@
 import { Request, Response } from "express";
 import { handleHttp } from "../utils/error.handle";
-import { GetUsers, DeletUser, UpdateUser } from "../services/users";
+import { GetUsers, DeletUser, UpdateUser, GetUser } from "../services/users";
 
+const getUser = async ({ params }: Request, res: Response) => {
+  try {
+    const { id } = params;
+    const response = await GetUser(id);
+    const data = response ? response : "Not_Usuario";
+    res.send(data);
+  } catch (e) {
+    handleHttp(res, "ERROR_GET_ITEM");
+  }
+};
 //muetra todos los usuarios
 const getUsers = async (req: Request, res: Response) => {
   try {
@@ -32,4 +42,4 @@ const deleteUser = async ({ params }: Request, res: Response) => {
   }
 };
 
-export { getUsers, updateUser, deleteUser };
+export { getUsers, updateUser, deleteUser, getUser };
