@@ -9,7 +9,7 @@ const registerCrtl = async ({ body }: Request, res: Response) => {
 const loginCrtl = async ({ body }: Request, res: Response) => {
   const { email, password } = body;
   const responseUser = await loginUser({ email, password });
-  if (responseUser === "contraseña incorrecta ") {
+  if (responseUser === "contraseña incorrecta") {
     res.status(403);
     res.send(responseUser);
   } else {

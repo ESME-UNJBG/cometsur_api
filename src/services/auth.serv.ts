@@ -3,15 +3,24 @@ import { User } from "../interfaces/user.interface";
 import UserModel from "../models/user";
 import { generateToken } from "../utils/jwt.handle";
 import { encrypt, verified } from "../utils/password.handle";
+import { sendWelcomeEmail } from "../utils/email.handle"; // 👈 correo de bienvenida
+
 const registerNewUser = async ({ email, password, name }: User) => {
   const checkIs = await UserModel.findOne({ email });
-  if (checkIs) return "Usurio,exite :)";
+  if (checkIs) return "Usuario ya existe :)";
+
   const passHash = await encrypt(password);
   const registerNewUser = await UserModel.create({
     email,
     password: passHash,
     name,
   });
+
+  // 👇 Enviar correo de bienvenida con credenciales
+  if (email && email.includes("@")) {
+    await sendWelcomeEmail(email, name, email, password);
+  }
+
   return registerNewUser;
 };
 
@@ -21,16 +30,14 @@ const loginUser = async ({ email, password }: Auth) => {
 
   const passwordHash = checkIs.password;
   const IsCorrect = await verified(password, passwordHash);
-
-  if (!IsCorrect) return "contraseña incorrecta ";
+  if (!IsCorrect) return "contraseña incorrecta";
 
   const token = generateToken({ id: checkIs.email, role: checkIs.estado });
   const data = {
     token,
     user: checkIs,
   };
-  //console.log("TOKEN:", token);
-  //console.log("DATA:", data.user);
+
   return data;
 };
 
