@@ -1,59 +1,60 @@
-// app.ts
-
 // 1️⃣ Importaciones necesarias
+
 import "dotenv/config"; // Carga las variables de entorno del archivo .env
-import express from "express"; // Framework para crear el servidor web (rutas HTTP)
-import cors from "cors"; // Middleware que permite peticiones desde otros dominios
-import http from "http"; // Módulo nativo de Node.js para crear servidores HTTP
-import { Server as SocketServer } from "socket.io"; // Clase de Socket.IO (la usamos para crear el servidor de sockets)
-import { router } from "./routes"; // Tus rutas tradicionales (usuarios, listas, etc.)
-import db from "./config/mongo"; // Conexión a tu base de datos MongoDB
+import express from "express"; // Framework para el servidor HTTP
+import cors from "cors"; // Middleware para habilitar peticiones desde otros orígenes
+import http from "http"; // Permite crear un servidor HTTP base para Socket.IO
+import { Server as SocketServer } from "socket.io"; // Importa la clase principal de Socket.IO
+import { router } from "./routes"; // Rutas REST (usuarios, listas, etc.)
+import db from "./config/mongo"; // Conexión con MongoDB
 
 // 2️⃣ Configuración básica
-const PORT = process.env.PORT || 3001; // Puerto donde correrá el servidor
-const app = express(); // Crea la aplicación Express
+const PORT = process.env.PORT || 3001;
+const app = express();
 
-// 3️⃣ Crear un servidor HTTP a partir de Express
-// Esto es necesario porque Socket.IO no trabaja directamente sobre 'app', sino sobre el servidor HTTP.
+// 3️⃣ Crear el servidor HTTP
 const server = http.createServer(app);
 
 // 4️⃣ Crear instancia de Socket.IO
-// Aquí conectamos Socket.IO al mismo servidor que Express usa.
+// Aquí definimos de dónde puede conectarse el cliente (React, por ejemplo)
 const io = new SocketServer(server, {
   cors: {
-    origin: "http://localhost:5173/", // 🔓 Permite conexiones desde cualquier frontend (React, móvil, etc.)
-    methods: ["GET", "POST"], // Métodos HTTP permitidos (por seguridad)
+    origin: "*", // 👈 Por ahora dejamos acceso libre; en producción se debe poner tu dominio React
+    methods: ["GET", "POST"],
   },
 });
 
-// 5️⃣ Middlewares de Express (funciones que procesan las peticiones antes de llegar a las rutas)
-app.use(cors()); // Permite peticiones entre diferentes dominios
-app.use(express.json()); // Permite leer cuerpos JSON en las peticiones
-app.use(router); // Carga tus rutas (por ejemplo, /api/user, /api/lista, etc.)
+// 5️⃣ Middlewares globales de Express
+app.use(cors());
+app.use(express.json());
+app.use(router);
 
-// 6️⃣ Conexión a la base de datos MongoDB
+// 6️⃣ Conexión a MongoDB
 db().then(() => console.log("✅ Conexión a MongoDB lista"));
 
-// 7️⃣ Configuración del servidor de sockets
+// 7️⃣ Configuración de Socket.IO
 io.on("connection", (socket) => {
-  // 🔹 Se ejecuta cada vez que un cliente se conecta
-  console.log("🟢 Cliente conectado:", socket.id);
+  // 🔹 Extraemos los datos del usuario desde la conexión
+  const userId = socket.handshake.query.userId;
+  const token = socket.handshake.query.token;
 
-  // 📩 Escuchar un evento llamado 'mensaje' enviado desde el cliente
-  socket.on("mensaje", (data) => {
-    console.log("💬 Mensaje recibido:", data);
+  console.log(`🟢 Usuario conectado: ${userId} | Socket ID: ${socket.id}`);
 
-    // 🔁 Reenviar ese mensaje a todos los clientes conectados
-    io.emit("mensaje", data);
+  // 📩 Escuchar mensajes enviados desde el frontend
+  socket.on("mensaje", (texto) => {
+    console.log(`💬 [${userId}] dice: ${texto}`);
+
+    // 🔁 Reenviar el mensaje a todos los usuarios conectados
+    io.emit("mensaje", { userId, texto });
   });
 
-  // 🔴 Detectar cuando un cliente se desconecta
+  // 🔴 Evento de desconexión
   socket.on("disconnect", () => {
-    console.log("🔴 Cliente desconectado:", socket.id);
+    console.log(`🔴 Usuario desconectado: ${userId}`);
   });
 });
 
-// 8️⃣ Iniciar servidor (Express + Socket.IO juntos)
+// 8️⃣ Arranque del servidor HTTP + WebSocket
 server.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
 });
