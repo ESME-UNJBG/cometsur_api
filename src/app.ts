@@ -1,5 +1,4 @@
 // 1️⃣ Importaciones necesarias
-
 import "dotenv/config"; // Carga las variables de entorno del archivo .env
 import express from "express"; // Framework para el servidor HTTP
 import cors from "cors"; // Middleware para habilitar peticiones desde otros orígenes
@@ -16,10 +15,10 @@ const app = express();
 const server = http.createServer(app);
 
 // 4️⃣ Crear instancia de Socket.IO
-// Aquí definimos de dónde puede conectarse el cliente (React, por ejemplo)
+// ⚠️ IMPORTANTE: en producción cambia "*" por el dominio de tu frontend (por seguridad)
 const io = new SocketServer(server, {
   cors: {
-    origin: "*", // 👈 Por ahora dejamos acceso libre; en producción se debe poner tu dominio React
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
@@ -34,14 +33,27 @@ db().then(() => console.log("✅ Conexión a MongoDB lista"));
 
 // 7️⃣ Configuración de Socket.IO
 io.on("connection", (socket) => {
-  // 🔹 Extraemos los datos del usuario desde la conexión
-  const userId = socket.handshake.query.userId;
-  const token = socket.handshake.query.token;
+  const userId = socket.handshake.query.userId as string;
+  const token = socket.handshake.query.token as string;
 
-  console.log(`🟢 Usuario conectado: ${userId} | Socket ID: ${socket.id}`);
+  console.log(
+    `🟢 Usuario conectado: ${userId || "desconocido"} | Socket ID: ${socket.id}`
+  );
 
-  // 📩 Escuchar mensajes enviados desde el frontend
-  socket.on("mensaje", (texto) => {
+  // 📩 Escuchar mensajes desde el frontend
+  socket.on("mensaje", (data) => {
+    let texto: string;
+
+    // Permitir tanto string como objeto
+    if (typeof data === "string") {
+      texto = data;
+    } else if (typeof data === "object" && data.texto) {
+      texto = data.texto;
+    } else {
+      console.warn("⚠️ Mensaje con formato inválido recibido:", data);
+      return;
+    }
+
     console.log(`💬 [${userId}] dice: ${texto}`);
 
     // 🔁 Reenviar el mensaje a todos los usuarios conectados
@@ -50,7 +62,7 @@ io.on("connection", (socket) => {
 
   // 🔴 Evento de desconexión
   socket.on("disconnect", () => {
-    console.log(`🔴 Usuario desconectado: ${userId}`);
+    console.log(`🔴 Usuario desconectado: ${userId || "desconocido"}`);
   });
 });
 
