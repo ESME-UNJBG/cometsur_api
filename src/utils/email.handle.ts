@@ -9,7 +9,7 @@ interface SendEmailResult {
  * Envía un correo de bienvenida o actualización de credenciales.
  * - Mantiene diseño original con colores y estilo.
  * - No bloquea la API si falla.
- * - Logs completos para depuración.
+ * - Logs completos para depuración en Render.
  */
 export const sendWelcomeEmail = async (
   to: string,
@@ -107,22 +107,36 @@ export const sendWelcomeEmail = async (
       `,
     };
 
-    // Envío en background: no bloquea registro o actualización
+    console.log(
+      `🚀 [EMAIL] Intentando enviar correo a ${to} mediante ${host}...`
+    );
+
+    // Envío y depuración extendida
     transporter
       .sendMail(mailOptions)
-      .then((info) =>
-        console.log(
-          `✅ Correo enviado correctamente a ${to} mediante ${host}`,
-          info
-        )
-      )
-      .catch((err) =>
-        console.warn(`❌ No se pudo enviar correo a ${to}:`, err?.message)
-      );
+      .then((info) => {
+        console.log("✅ [EMAIL] Correo enviado correctamente");
+        console.log("📨 [SMTP RESPONSE]", {
+          accepted: info.accepted,
+          rejected: info.rejected,
+          response: info.response,
+          envelope: info.envelope,
+          messageId: info.messageId,
+        });
+      })
+      .catch((err) => {
+        console.warn(`❌ [EMAIL] No se pudo enviar correo a ${to}`);
+        console.error("🧩 [SMTP ERROR DETAILS]:", {
+          message: err?.message,
+          code: err?.code,
+          command: err?.command,
+          stack: err?.stack,
+        });
+      });
 
     return { success: true };
   } catch (error) {
-    console.error("❌ Error preparando correo:", error);
+    console.error("❌ [EMAIL] Error preparando correo:", error);
     return { success: false, error };
   }
 };
