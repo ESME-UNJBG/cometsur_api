@@ -1,100 +1,121 @@
 // app.ts
-import "dotenv/config";
-import express from "express";
-import cors from "cors";
-import http from "http";
-import { Server as SocketServer } from "socket.io";
-import jwt from "jsonwebtoken";
-import { router } from "./routes";
-import db from "./config/mongo";
 
+import "dotenv/config"; // Carga las variables de entorno del archivo .env
+import express from "express"; // Framework para el servidor HTTP
+import cors from "cors"; // Middleware para habilitar peticiones desde otros orígenes
+import http from "http"; // Permite crear un servidor HTTP base para Socket.IO
+import { Server as SocketServer } from "socket.io"; // Importa la clase principal de Socket.IO
+import { router } from "./routes"; // Rutas REST (usuarios, listas, etc.)
+import db from "./config/mongo"; // Conexión con MongoDB
+import jwt, { JwtPayload } from "jsonwebtoken"; // <-- añadido para leer token
+
+// 2️⃣ Configuración básica
 const PORT = process.env.PORT || 3001;
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*"; // en producción pon tu dominio
-const JWT_SECRET = process.env.JWT_SECRET || "change_this_secret";
-
 const app = express();
+
+// 3️⃣ Crear el servidor HTTP
 const server = http.createServer(app);
 
+// 4️⃣ Crear instancia de Socket.IO
+// ⚠️ IMPORTANTE: en producción cambia "*" por el dominio de tu frontend (por seguridad)
 const io = new SocketServer(server, {
   cors: {
-    origin: FRONTEND_ORIGIN,
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
 
+// 5️⃣ Middlewares globales de Express
 app.use(cors());
 app.use(express.json());
 app.use(router);
 
+// 6️⃣ Conexión a MongoDB
 db().then(() => console.log("✅ Conexión a MongoDB lista"));
 
-// Socket.IO
-io.on("connection", (socket) => {
-  // handshake.query viene como strings (o objet); lo casteamos y validamos
-  const handshakeUserId = (socket.handshake.query.userId as string) || null;
-  const handshakeToken = (socket.handshake.query.token as string) || null;
+// Helper pequeño: decodifica token y extrae _id y estado (si están)
+const extractUserFromJwt = (token?: string | null) => {
+  if (!token)
+    return { id: null as string | null, estado: null as string | null };
 
-  // Intentamos verificar token si viene
-  let verifiedUserId: string | null = null;
-  if (handshakeToken) {
-    try {
-      const payload = jwt.verify(handshakeToken, JWT_SECRET) as any;
-      // asumo que tu token guarda el id en payload.id (ajusta si tu payload es distinto)
-      verifiedUserId = payload.id ?? payload.userId ?? payload.sub ?? null;
-    } catch (err) {
-      console.warn("⚠️ Token inválido en handshake:", (err as Error).message);
-      // No hacemos disconnect automático para no romper UX; solo no confiamos en token
-      // Si prefieres forzar desconexión, podrías hacer: socket.disconnect();
+  try {
+    // jwt.verify puede devolver JwtPayload | string
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret") as
+      | JwtPayload
+      | string;
+
+    if (!decoded) return { id: null, estado: null };
+
+    if (typeof decoded === "string") {
+      // caso raro: token decodificado como string -> tratamos como id fallback
+      return { id: decoded, estado: null };
     }
+
+    // Normal: objeto JwtPayload -> extraemos campos comunes
+    const maybeId =
+      (typeof decoded._id === "string" && decoded._id) ||
+      (typeof decoded.id === "string" && decoded.id) ||
+      (typeof decoded.sub === "string" && decoded.sub) ||
+      null;
+
+    const maybeEstado =
+      (typeof decoded.estado === "string" && decoded.estado) ||
+      (typeof decoded.role === "string" && decoded.role) ||
+      null;
+
+    return { id: maybeId, estado: maybeEstado };
+  } catch (err) {
+    // token inválido/expirado -> devolvemos nulls y seguimos con fallback
+    return { id: null, estado: null };
   }
+};
 
-  // Decidimos el userId que vamos a usar en el socket: prioridad al token verificado
-  const attachedUserId = verifiedUserId || handshakeUserId || "anon";
+// 7️⃣ Configuración de Socket.IO
+io.on("connection", (socket) => {
+  // leemos token (si fue enviado en handshake) y userId (fallback)
+  const handshakeUserId = socket.handshake.query.userId as string | undefined;
+  const handshakeToken = socket.handshake.query.token as string | undefined;
 
-  // Guardamos la identidad en socket.data (útil, seguro y persistente en la conexión)
-  socket.data.userId = attachedUserId;
-
-  console.log(
-    `🟢 Conexión socket: id=${socket.id} | attachedUserId=${socket.data.userId}`
+  // intentamos extraer id y estado del token (si existe)
+  const { id: tokenUserId, estado: tokenUserEstado } = extractUserFromJwt(
+    handshakeToken ?? null
   );
 
-  // Manejo de mensajes entrantes
-  socket.on("mensaje", (data) => {
-    // Normalizar el texto
-    let texto: string = "";
+  // Prioridad: usar id verificado desde token; si no, usar el userId enviado en handshake
+  const userId = tokenUserId ?? handshakeUserId ?? null;
+  const userEstado = tokenUserEstado ?? null;
 
+  console.log(
+    `🟢 Usuario conectado: ${userId ?? "desconocido"} | Socket ID: ${socket.id}`
+  );
+
+  // 📩 Escuchar mensajes desde el frontend
+  socket.on("mensaje", (data) => {
+    let texto: string;
+
+    // Permitir tanto string como objeto
     if (typeof data === "string") {
       texto = data;
-    } else if (typeof data === "object" && data !== null) {
-      // data puede ser { texto } o { userId, texto } (ignoramos userId enviado por cliente)
-      texto =
-        typeof (data as any).texto === "string" ? (data as any).texto : "";
-    }
-
-    if (!texto || texto.trim() === "") {
-      console.warn("⚠️ Mensaje vacío o inválido recibido, se ignora.");
+    } else if (data && typeof data === "object" && (data as any).texto) {
+      texto = (data as any).texto;
+    } else {
+      console.warn("⚠️ Mensaje con formato inválido recibido:", data);
       return;
     }
 
-    const mensajeEmitir = {
-      userId: socket.data.userId,
-      texto: texto.trim(),
-      timestamp: new Date().toISOString(),
-    };
+    console.log(`💬 [${userId ?? "desconocido"}] dice: ${texto}`);
 
-    console.log(`💬 [${socket.data.userId}] -> ${mensajeEmitir.texto}`);
-
-    // Emitimos a todos (puedes adaptar: broadcast a salas, emitir solo a otros, etc.)
-    io.emit("mensaje", mensajeEmitir);
+    // 🔁 Reenviar el mensaje a todos los usuarios conectados
+    io.emit("mensaje", { userId, texto });
   });
 
-  socket.on("disconnect", (reason) => {
-    console.log(
-      `🔴 Desconexión socket: id=${socket.id} | userId=${socket.data.userId} | reason=${reason}`
-    );
+  // 🔴 Evento de desconexión
+  socket.on("disconnect", () => {
+    console.log(`🔴 Usuario desconectado: ${userId ?? "desconocido"}`);
   });
 });
 
+// 8️⃣ Arranque del servidor HTTP + WebSocket
 server.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
 });
