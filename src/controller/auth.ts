@@ -9,7 +9,12 @@ const registerCrtl = async ({ body }: Request, res: Response) => {
 const loginCrtl = async ({ body }: Request, res: Response) => {
   const { email, password } = body;
   const responseUser = await loginUser({ email, password });
-  if (responseUser === "contraseña incorrecta") {
+
+  // ✅ CORREGIDO: "Contraseña incorrecta" con C mayúscula
+  if (responseUser === "Contraseña incorrecta") {
+    res.status(403);
+    res.send(responseUser);
+  } else if (responseUser === "No coinciden") {
     res.status(403);
     res.send(responseUser);
   } else {
