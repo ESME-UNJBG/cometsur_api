@@ -1,7 +1,7 @@
 // src/sockets/index.ts
 import { Server as SocketServer } from "socket.io";
 import { authenticateSocket } from "./auth.socket";
-import { MensajesHandler } from "../utils/mensajes.handle"; // ← ✅ Import desde utils
+import { MensajesHandler } from "../utils/mensajes.handle"; // ✅ CORREGIDO
 
 /**
  * 🎯 Configuración principal de Socket.IO
@@ -12,7 +12,7 @@ export const configureSockets = (io: SocketServer) => {
 
   console.log("🔌 [SOCKETS] Configurando Socket.IO...");
 
-  io.on("connection", (socket) => {
+  io.on("connection", async (socket) => {
     console.log("🟡 [SOCKETS] Nueva conexión:", socket.id);
 
     // ✅ 1. AUTENTICAR usuario
@@ -30,11 +30,14 @@ export const configureSockets = (io: SocketServer) => {
       `🟢 [SOCKETS] Usuario unido a salas: user_${userData.id}, sala_general`
     );
 
-    // ✅ 4. CONFIGURAR manejadores
+    // 🆕 NUEVO: 4. CARGAR MENSAJES HISTÓRICOS (30 minutos)
+    await mensajesHandler.cargarMensajesHistoricos(socket);
+
+    // ✅ 5. CONFIGURAR manejadores
     mensajesHandler.handleMensajeGeneral(socket, userData);
     mensajesHandler.handleMensajePrivado(socket, userData);
 
-    // ✅ 5. MANEJAR desconexión
+    // ✅ 6. MANEJAR desconexión
     socket.on("disconnect", (reason) => {
       console.log(`🔴 [SOCKETS] Desconectado: ${userData.id} - ${reason}`);
       mensajesHandler.unregisterUser(socket.id);
@@ -46,12 +49,12 @@ export const configureSockets = (io: SocketServer) => {
       });
     });
 
-    // ✅ 6. MANEJAR errores
+    // ✅ 7. MANEJAR errores
     socket.on("error", (error) => {
       console.error("💥 [SOCKETS] Error:", error);
     });
 
-    // ✅ 7. NOTIFICAR conexión exitosa
+    // ✅ 8. NOTIFICAR conexión exitosa
     socket.emit("conexion_establecida", {
       mensaje: "Conectado correctamente",
       userId: userData.id,
@@ -63,6 +66,5 @@ export const configureSockets = (io: SocketServer) => {
 
   console.log("✅ [SOCKETS] Configuración de Socket.IO completada");
 
-  // ✅ Opcional: Exportar handler para uso en otras partes
   return { mensajesHandler };
 };
