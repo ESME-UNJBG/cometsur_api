@@ -30,12 +30,12 @@ export const DeletUser = async (id: string) => {
 /**
  * Actualizar usuario.
  * Envía correo solo si cambia email o password.
+ * Correos falsos no detienen la actualización.
  */
 export const UpdateUser = async (
   id: string,
   data: Partial<User>
 ): Promise<User | null> => {
-  // Obtener usuario actual (antes de actualizar)
   const oldUserDoc = await UserModel.findById(id);
   if (!oldUserDoc) throw new Error("Usuario no encontrado");
 
@@ -43,48 +43,34 @@ export const UpdateUser = async (
   let emailChanged = false;
   let passwordChanged = false;
 
-  // Detectar cambio de email
   if (typeof data.email === "string" && data.email !== oldUserDoc.email) {
     emailChanged = true;
   }
 
-  // Si se envió una nueva contraseña, guardamos la versión en texto para el correo
   if (typeof data.password === "string" && data.password.length > 0) {
     plainPassword = data.password;
     data.password = await encrypt(data.password);
     passwordChanged = true;
   }
 
-  // Actualizamos el usuario y devolvemos el documento nuevo
   const updatedUserDoc = await UserModel.findOneAndUpdate({ _id: id }, data, {
     new: true,
   });
 
-  // Si no hubo documento actualizado (p. ej. borrado mientras tanto)
   if (!updatedUserDoc) return null;
 
-  // Solo enviar correo si cambió email o contraseña
   if (emailChanged || passwordChanged) {
-    const nameToUse = updatedUserDoc.name || "Usuario";
-    const emailToUse = updatedUserDoc.email;
-
-    // Si no hay contraseña nueva, indicamos que no fue modificada
-    const passwordToSend =
-      plainPassword ?? "Tu contraseña no ha sido modificada.";
-
-    if (emailToUse && emailToUse.includes("@")) {
-      try {
-        await sendWelcomeEmail(
-          emailToUse,
-          nameToUse,
-          emailToUse,
-          passwordToSend
-        );
-      } catch (err) {
-        // No rompemos la actualización por un fallo en el envío de correo
-        console.error("Error enviando email tras actualización:", err);
-      }
-    }
+    const passwordToSend = plainPassword ?? "Tu contraseña no ha sido modificada.";
+    sendWelcomeEmail(
+      updatedUserDoc.email,
+      updatedUserDoc.name || "Usuario",
+      updatedUserDoc.email,
+      passwordToSend
+    )
+      .then((res) => console.log("📧 [UPDATE] Correo enviado:", res.success))
+      .catch((err) =>
+        console.warn("📧 [UPDATE] No se pudo enviar correo:", err?.message)
+      );
   }
 
   return updatedUserDoc as unknown as User;
