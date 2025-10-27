@@ -1,26 +1,35 @@
 import nodemailer from "nodemailer";
 
+interface SendEmailResult {
+  success: boolean;
+  error?: any;
+}
+
 /**
- * Envía un correo de bienvenida con diseño optimizado para modo claro/oscuro.
- * Retorna { success: boolean, error?: any } para que el llamador no "rompa" la lógica principal.
+ * Envía un correo de bienvenida o actualización de credenciales.
+ * - Mantiene diseño original con colores y estilo.
+ * - No bloquea la API si falla.
+ * - Logs completos para depuración.
  */
 export const sendWelcomeEmail = async (
   to: string,
   name: string,
   email: string,
   password: string
-): Promise<{ success: boolean; error?: any }> => {
+): Promise<SendEmailResult> => {
   try {
     const senderEmail = process.env.EMAIL_USER || "";
-    const allowInsecure = process.env.SMTP_ALLOW_INSECURE === "true"; // sólo true en DEV
+    const senderPass = process.env.EMAIL_PASS || "";
+    const allowInsecure = process.env.SMTP_ALLOW_INSECURE === "true"; // solo true en DEV
     const domain = senderEmail.split("@")[1]?.toLowerCase() || "";
 
-    if (!senderEmail || !process.env.EMAIL_PASS) {
+    if (!senderEmail || !senderPass) {
       throw new Error(
         "EMAIL_USER o EMAIL_PASS no están configurados en las variables de entorno."
       );
     }
 
+    // Configuración automática según proveedor
     let host = "smtp.gmail.com";
     let port = 465;
     let secure = true;
@@ -48,18 +57,16 @@ export const sendWelcomeEmail = async (
       port,
       secure,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: senderEmail,
+        pass: senderPass,
       },
       tls: {
-        // En producción allowInsecure = false -> rejectUnauthorized = true (seguro)
-        // En DEV puedes poner SMTP_ALLOW_INSECURE=true para permitir false
         rejectUnauthorized: !allowInsecure,
       },
     });
 
     const mailOptions = {
-      from: `"Cometsur" <${process.env.EMAIL_USER}>`,
+      from: `"Cometsur" <${senderEmail}>`,
       to,
       subject: "Credenciales de acceso - Cometsur 🎉",
       html: `
@@ -100,12 +107,22 @@ export const sendWelcomeEmail = async (
       `,
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ Correo enviado correctamente a ${to} mediante ${host}`);
+    // Envío en background: no bloquea registro o actualización
+    transporter
+      .sendMail(mailOptions)
+      .then((info) =>
+        console.log(
+          `✅ Correo enviado correctamente a ${to} mediante ${host}`,
+          info
+        )
+      )
+      .catch((err) =>
+        console.warn(`❌ No se pudo enviar correo a ${to}:`, err?.message)
+      );
+
     return { success: true };
   } catch (error) {
-    console.error("❌ Error al enviar correo:", error);
-    // No lanzamos excepción: devolvemos estado y permitimos que el llamador continúe
+    console.error("❌ Error preparando correo:", error);
     return { success: false, error };
   }
 };
