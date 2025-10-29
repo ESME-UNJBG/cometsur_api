@@ -34,7 +34,7 @@ export const sendWelcomeEmail = async (
     const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
-      secure: false, // Brevo usa TLS STARTTLS, no SSL
+      secure: true, // Brevo usa TLS STARTTLS, no SSL
       auth: {
         user: smtpUser,
         pass: smtpKey,
