@@ -6,11 +6,12 @@ interface SendEmailResult {
 }
 
 /**
- * Envía un correo de bienvenida o actualización de credenciales.
- * - Mantiene diseño original con colores y estilo.
- * - No bloquea la API si falla.
- * - Logs completos para depuración en Render.
- */
+
+* Envío de correo mediante Brevo SMTP.
+* * 100% compatible con Render (sin timeout).
+* * Usa variables de entorno configuradas en Settings > Environment.
+* * Incluye logs detallados para depuración.
+    */
 export const sendWelcomeEmail = async (
   to: string,
   name: string,
@@ -18,125 +19,44 @@ export const sendWelcomeEmail = async (
   password: string
 ): Promise<SendEmailResult> => {
   try {
-    const senderEmail = process.env.EMAIL_USER || "";
-    const senderPass = process.env.EMAIL_PASS || "";
-    const allowInsecure = process.env.SMTP_ALLOW_INSECURE === "true"; // solo true en DEV
-    const domain = senderEmail.split("@")[1]?.toLowerCase() || "";
+    const smtpUser = process.env.BREVO_SMTP_USER || "";
+    const smtpKey = process.env.BREVO_SMTP_KEY || "";
+    const smtpHost = process.env.BREVO_SMTP_HOST || "smtp-relay.brevo.com";
+    const smtpPort = Number(process.env.BREVO_SMTP_PORT) || 587;
 
-    if (!senderEmail || !senderPass) {
+    if (!smtpUser || !smtpKey) {
       throw new Error(
-        "EMAIL_USER o EMAIL_PASS no están configurados en las variables de entorno."
+        "❌ Variables SMTP de Brevo no configuradas correctamente."
       );
     }
 
-    // Configuración automática según proveedor
-    let host = "smtp.gmail.com";
-    let port = 465;
-    let secure = true;
-
-    if (domain.includes("outlook") || domain.includes("hotmail")) {
-      host = "smtp.office365.com";
-      port = 587;
-      secure = false;
-    } else if (domain.includes("yahoo")) {
-      host = "smtp.mail.yahoo.com";
-      port = 465;
-      secure = true;
-    } else if (domain.includes(".edu.") || domain.endsWith(".edu.pe")) {
-      host = `smtp.${domain}`;
-      port = 465;
-      secure = true;
-    } else if (!domain.includes("gmail")) {
-      host = `mail.${domain}`;
-      port = 465;
-      secure = true;
-    }
-
+    // Configuración del transporte SMTP de Brevo
     const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
+      host: smtpHost,
+      port: smtpPort,
+      secure: false, // Brevo usa TLS STARTTLS, no SSL
       auth: {
-        user: senderEmail,
-        pass: senderPass,
-      },
-      tls: {
-        rejectUnauthorized: !allowInsecure,
+        user: smtpUser,
+        pass: smtpKey,
       },
     });
 
     const mailOptions = {
-      from: `"Cometsur" <${senderEmail}>`,
+      from: `"Cometsur" <${smtpUser}>`,
       to,
       subject: "Credenciales de acceso - Cometsur 🎉",
-      html: `
-        <div style="
-          font-family: Arial, sans-serif;
-          padding: 20px;
-          background-color: #f4f4f4;
-          color: #222222;
-          border-radius: 10px;
-        ">
-          <h2 style="color: #444444; margin: 0 0 8px 0;">Hola, ${name} 👋</h2>
-          <p style="margin: 6px 0 0 0;">
-            El congreso <strong style="color:#b33;">Cometsur</strong> te da la bienvenida al evento.
-          </p>
-          <p style="margin: 8px 0 0 0;">
-            Gracias por registrarte. Esperamos que disfrutes la experiencia.
-          </p>
-
-          <br/>
-
-          <div style="
-            background-color: #e2b3b3;
-            padding: 15px;
-            border-radius: 10px;
-            color: #ffffff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-          ">
-            <h3 style="margin: 0 0 8px 0;">🔐 Tus credenciales para iniciar sesión:</h3>
-            <p style="margin: 4px 0;"><strong>Correo:</strong> ${email}</p>
-            <p style="margin: 4px 0;"><strong>Contraseña:</strong> ${password}</p>
-          </div>
-
-          <br/>
-          <p style="font-size: 14px; color: #555555; margin: 0;">
-            — Equipo Cometsur
-          </p>
-        </div>
-      `,
+      html: `      <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4; border-radius: 10px;">        <h2 style="color: #444;">Hola, ${name} 👋</h2>        <p>El congreso <strong style="color:#b33;">Cometsur</strong> te da la bienvenida al evento.</p>        <p>Gracias por registrarte. Esperamos que disfrutes la experiencia.</p>        <br/>        <div style="background-color: #e2b3b3; padding: 15px; border-radius: 10px; color: #fff;">          <h3>🔐 Tus credenciales para iniciar sesión:</h3>          <p><strong>Correo:</strong> ${email}</p>          <p><strong>Contraseña:</strong> ${password}</p>        </div>        <br/>        <p style="font-size: 14px; color: #555;">— Equipo Cometsur</p>      </div>
+     `,
     };
 
-    console.log(
-      `🚀 [EMAIL] Intentando enviar correo a ${to} mediante ${host}...`
-    );
+    console.log(`🚀 [EMAIL] Enviando correo a ${to} vía Brevo SMTP...`);
 
-    // Envío y depuración extendida
-    transporter
-      .sendMail(mailOptions)
-      .then((info) => {
-        console.log("✅ [EMAIL] Correo enviado correctamente");
-        console.log("📨 [SMTP RESPONSE]", {
-          accepted: info.accepted,
-          rejected: info.rejected,
-          response: info.response,
-          envelope: info.envelope,
-          messageId: info.messageId,
-        });
-      })
-      .catch((err) => {
-        console.warn(`❌ [EMAIL] No se pudo enviar correo a ${to}`);
-        console.error("🧩 [SMTP ERROR DETAILS]:", {
-          message: err?.message,
-          code: err?.code,
-          command: err?.command,
-          stack: err?.stack,
-        });
-      });
+    await transporter.sendMail(mailOptions);
 
+    console.log("✅ [EMAIL] Correo enviado correctamente vía Brevo.");
     return { success: true };
   } catch (error) {
-    console.error("❌ [EMAIL] Error preparando correo:", error);
+    console.error("❌ [EMAIL] Error al enviar correo:", error);
     return { success: false, error };
   }
 };
