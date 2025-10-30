@@ -26,7 +26,7 @@ export const sendWelcomeEmail = async (
       {
         sender: {
           name: "Cometsur",
-          email: "edgardsantiagochipanaescalante@gmail.com",
+          email: "cometsur2025@gmail.com",
         }, // debe estar verificado en Brevo
         to: [{ email: to, name }],
         subject: "Credenciales de acceso - Cometsur 🎉",
