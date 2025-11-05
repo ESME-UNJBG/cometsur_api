@@ -17,6 +17,9 @@ export const sendWelcomeEmail = async (
 ): Promise<SendEmailResult> => {
   try {
     const apiKey = process.env.BREVO_API_KEY;
+    const frontendUrl =
+      process.env.FRONTEND_URL || "https://cometsur-app.onrender.com";
+
     if (!apiKey) {
       throw new Error("❌ BREVO_API_KEY no configurada en .env");
     }
@@ -42,6 +45,7 @@ export const sendWelcomeEmail = async (
               <p><strong>Contraseña:</strong> ${password}</p>
             </div>
             <br/>
+            <p>🌐 Puedes acceder al sitio aquí: <a href="${frontendUrl}" target="_blank">${frontendUrl}</a></p>
             <p style="font-size: 14px; color: #555;">— Equipo Cometsur</p>
           </div>
         `,
