@@ -17,6 +17,18 @@ const UserSchema = new Schema<User>(
       type: String,
       unique: true,
     },
+    category: {
+      required: true,
+      type: String,
+    },
+    importe: {
+      required: true,
+      type: String,
+    },
+    university: {
+      required: true,
+      type: String,
+    },
     estado: {
       type: String,
       default: "usuario",

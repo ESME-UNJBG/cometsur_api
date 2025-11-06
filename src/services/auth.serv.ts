@@ -11,7 +11,14 @@ import { isTemporaryEmail } from "../utils/emailValidator"; // 👈 Nuevo import
  * - Permite cualquier email (falso o real)
  * - Envía correo solo si no es temporal
  */
-const registerNewUser = async ({ email, password, name }: User) => {
+const registerNewUser = async ({
+  email,
+  password,
+  name,
+  university,
+  category,
+  importe,
+}: User) => {
   console.log("🔐 [REGISTRO] Iniciando registro para:", email);
 
   const checkIs = await UserModel.findOne({ email });
@@ -26,12 +33,18 @@ const registerNewUser = async ({ email, password, name }: User) => {
     email,
     password: passHash,
     name,
+    university,
+    importe,
+    category,
   });
 
   console.log("✅ [REGISTRO] Usuario creado en BD:", {
     id: newUser._id,
     email: newUser.email,
     name: newUser.name,
+    university: newUser.university,
+    importe: newUser.importe,
+    category: newUser.category,
   });
 
   // 👇 Validación antes de enviar correo
@@ -80,6 +93,9 @@ const loginUser = async ({ email, password }: Auth) => {
       name: checkIs.name,
       estado: checkIs.estado,
       asistencia: checkIs.asistencia || 0,
+      university: checkIs.university,
+      importe: checkIs.importe,
+      category: checkIs.category,
     },
   };
 
