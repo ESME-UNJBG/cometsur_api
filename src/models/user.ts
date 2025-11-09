@@ -37,6 +37,19 @@ const UserSchema = new Schema<User>(
       type: Number,
       default: 0,
     },
+    pago: {
+      required: true,
+      type: String,
+    },
+    baucher: {
+      required: true,
+      type: String,
+      unique: true,
+    },
+    profesion: {
+      required: true,
+      type: String,
+    },
   },
   {
     timestamps: true,
