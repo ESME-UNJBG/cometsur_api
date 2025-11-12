@@ -37,13 +37,47 @@ export const DeletUser = async (id: string) => {
  */
 export const UpdateUser = async (
   id: string,
-  data: Partial<User>
+  data: Partial<User> & { index?: number; valor?: number }
 ): Promise<User | null> => {
   console.log(`🔄 [UPDATE] Inicio actualización usuario: ${id}`);
   const oldUserDoc = await UserModel.findById(id);
   if (!oldUserDoc) {
     console.warn(`❌ [UPDATE] Usuario no encontrado: ${id}`);
     throw new Error("Usuario no encontrado");
+  }
+
+  // 🟡 NUEVA LÓGICA: actualizar el array de asistencia
+  if (typeof data.index === "number" && typeof data.valor === "number") {
+    console.log(
+      `🧩 [ASISTENCIA] Actualizando índice ${data.index} con valor ${data.valor}`
+    );
+
+    const asistenciaActual = oldUserDoc.asistencia || [];
+
+    if (data.index < asistenciaActual.length) {
+      asistenciaActual[data.index] = data.valor;
+      console.log(`✏️ [ASISTENCIA] Índice existente, valor reemplazado.`);
+    } else {
+      while (asistenciaActual.length < data.index) {
+        asistenciaActual.push(0);
+      }
+      asistenciaActual.push(data.valor);
+      console.log(`➕ [ASISTENCIA] Índice nuevo, valor agregado al array.`);
+    }
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      id,
+      { $set: { asistencia: asistenciaActual } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      console.warn(`⚠️ [ASISTENCIA] No se pudo actualizar el array asistencia`);
+      return null;
+    }
+
+    console.log(`✅ [ASISTENCIA] Asistencia actualizada correctamente`);
+    return updatedUser as unknown as User;
   }
 
   let plainPassword: string | undefined;
@@ -91,18 +125,15 @@ export const UpdateUser = async (
 
     // NOTE: Validación simple para correos temporales
     if (isTemporaryEmail(emailToSend)) {
-      // Si el email es desechable, NO enviamos correo pero sí devolvemos el usuario actualizado.
       console.log(
         `🚫 [UPDATE] Correo temporal detectado (${emailToSend}). Omitiendo envío de notificación.`
       );
     } else {
-      // Enviar correo en background: no bloquea la respuesta al cliente
       sendWelcomeEmail(emailToSend, nameToSend, emailToSend, passwordToSend)
         .then((res) => {
           console.log("📧 [UPDATE] Resultado envío:", res);
         })
         .catch((err) => {
-          // No rompemos la actualización por un fallo en el envío de correo
           console.warn(
             "📧 [UPDATE] Error enviando correo (no crítico):",
             err?.message || err

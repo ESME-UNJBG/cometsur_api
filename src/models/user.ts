@@ -34,8 +34,8 @@ const UserSchema = new Schema<User>(
       default: "usuario",
     },
     asistencia: {
-      type: Number,
-      default: 0,
+      type: [Number],
+      default: [0, 0, 0, 0, 0, 0],
     },
     pago: {
       required: true,
